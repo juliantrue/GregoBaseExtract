@@ -49,14 +49,36 @@ jobs:
           echo "Found SQL at: ${SQL_PATH}"
           cp -v "${SQL_PATH}" raw/gregobase_online.sql
 
-      - name: Write GREGOBASE_CHECKSUM (SHA-256)
+      - name: Compare checksum with repo
+        id: checksum_diff
         shell: bash
         run: |
           set -euo pipefail
-          sha256sum raw/gregobase_online.sql | awk '{print $1}' > GREGOBASE_CHECKSUM
-          echo "GREGOBASE_CHECKSUM=$(cat GREGOBASE_CHECKSUM)"
+          new_sum=$(sha256sum raw/gregobase_online.sql | awk '{print $1}')
+          if [[ -f GREGOBASE_CHECKSUM ]]; then
+            old_sum=$(cat GREGOBASE_CHECKSUM)
+          else
+            old_sum=""
+          fi
+          echo "new=${new_sum}" >> "$GITHUB_OUTPUT"
+          if [[ "${new_sum}" == "${old_sum}" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Checksum unchanged (${new_sum}). No extract update required."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Checksum changed: old='${old_sum}' new='${new_sum}'. Proceeding with extract."
+          fi
+
+      - name: Write GREGOBASE_CHECKSUM (SHA-256)
+        if: steps.checksum_diff.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf "%s\n" "${{ steps.checksum_diff.outputs.new }}" > GREGOBASE_CHECKSUM
+          echo "GREGOBASE_CHECKSUM=${{ steps.checksum_diff.outputs.new }}"
 
       - name: Run extraction scripts
+        if: steps.checksum_diff.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -68,10 +90,11 @@ jobs:
           python3 scripts/unify_chants.py --output extract/jsonl/chants.jsonl --gzip --rm
 
       - name: Create Pull Request
+        if: steps.checksum_diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "Update extract from latest GregoBase"
-          title: "Update extract from latest GregoBase"
+          title: "Update Extract from GregoBase ${{ steps.gregobase_sha.outputs.sha }}"
           body: "Create extract for GregoBase ${{ steps.gregobase_sha.outputs.sha }}"
           branch: chore/update-extract
           delete-branch: true
