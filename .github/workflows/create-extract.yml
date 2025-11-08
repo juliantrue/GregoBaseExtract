@@ -1,0 +1,81 @@
+name: Create Extract
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-extract:
+    name: Clone GregoBase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+      
+      - name: Checkout gregorio-project/GregoBase (HTTPS via GITHUB_TOKEN)
+        uses: actions/checkout@v4
+        with:
+          repository: gregorio-project/GregoBase
+          path: GregoBase
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Record GregoBase commit SHA
+        id: gregobase_sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "sha=$(git -C GregoBase rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Copy gregobase_online.sql into raw/
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p raw
+          # Try to locate the SQL file within the cloned GregoBase repo
+          SQL_PATH=$(find GregoBase -type f -name 'gregobase_online.sql' -print -quit)
+          if [[ -z "${SQL_PATH}" ]]; then
+            echo "Could not find gregobase_online.sql in GregoBase repo" >&2
+            exit 1
+          fi
+          echo "Found SQL at: ${SQL_PATH}"
+          cp -v "${SQL_PATH}" raw/gregobase_online.sql
+
+      - name: Write GREGOBASE_CHECKSUM (SHA-256)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum raw/gregobase_online.sql | awk '{print $1}' > GREGOBASE_CHECKSUM
+          echo "GREGOBASE_CHECKSUM=$(cat GREGOBASE_CHECKSUM)"
+
+      - name: Run extraction scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p extract/csv extract/jsonl
+          python3 --version
+          # Extract CSVs from the SQL dump
+          python3 scripts/extract_tables.py -i raw/gregobase_online.sql -o extract/csv
+          # Build unified chants JSONL (gzip and remove uncompressed file)
+          python3 scripts/unify_chants.py --output extract/jsonl/chants.jsonl --gzip --rm
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Update extract from latest GregoBase"
+          title: "Update extract from latest GregoBase"
+          body: "Create extract for GregoBase ${{ steps.gregobase_sha.outputs.sha }}"
+          branch: chore/update-extract
+          delete-branch: true
+          add-paths: |
+            raw/gregobase_online.sql
+            GREGOBASE_CHECKSUM
+            extract/**
