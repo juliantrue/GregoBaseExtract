@@ -1,10 +1,10 @@
 # GregoBaseExtract
 
-<img src="assets/scribe.png" alt="GregoBase Extract Scribe" width="160" align="left" />
+<p align="center">
+  <img src="assets/scribe.png" alt="GregoBase Extract Scribe" width="200" />
+</p>
 
 Extracts structured data from the GregoBase SQL dump for downstream analysis and tooling. Upstream: https://github.com/gregorio-project/GregoBase
-
-<br clear="left" />
 
 ## Contents
 - `raw/gregobase_online.sql` — SQL dump copied from the GregoBase repo
