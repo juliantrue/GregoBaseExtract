@@ -9,12 +9,12 @@ permissions:
 
 jobs:
   create-extract:
-    name: Clone GregoBase
+    name: Create Extract
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repository
         uses: actions/checkout@v4
-      
+
       - name: Checkout gregorio-project/GregoBase (HTTPS via GITHUB_TOKEN)
         uses: actions/checkout@v4
         with:
@@ -33,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Copy gregobase_online.sql into raw/
         shell: bash
